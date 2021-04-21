@@ -318,11 +318,60 @@
     ],
     "submenus": [
       {
+        "id": "intersystems-community.servermanager.overflow.server",
+        "label": "More Actions...",
+        "icon": "$(ellipsis)"
+      },
+      {
+        "id": "intersystems-community.servermanager.overflow.namespaces",
+        "label": "More Actions...",
+        "icon": "$(ellipsis)"
+      },
+      {
+        "id": "intersystems-community.servermanager.overflow.namespace",
+        "label": "More Actions...",
+        "icon": "$(ellipsis)"
+      },
+      {
         "id": "intersystems-community.servermanager.iconColor",
         "label": "Set Icon Color"
       }
     ],
     "menus": {
+      "intersystems-community.servermanager.overflow.server": [
+        {
+          "command": "intersystems-community.servermanager.retryServer",
+          "group": "0_refresh@10"
+        },
+        {
+          "submenu": "intersystems-community.servermanager.iconColor",
+          "group": "1_edit@10"
+        },
+        {
+          "command": "intersystems-community.servermanager.editSettings",
+          "group": "1_edit@20"
+        },
+        {
+          "command": "intersystems-community.servermanager.storePassword",
+          "group": "9_password@10"
+        },
+        {
+          "command": "intersystems-community.servermanager.clearPassword",
+          "group": "9_password@20"
+        }
+      ],
+      "intersystems-community.servermanager.overflow.namespaces": [
+        {
+          "command": "intersystems-community.servermanager.retryServer",
+          "group": "0_refresh@10"
+        }
+      ],
+      "intersystems-community.servermanager.overflow.namespace": [
+        {
+          "command": "intersystems-community.servermanager.retryServer",
+          "group": "0_refresh@10"
+        }
+      ],
       "intersystems-community.servermanager.iconColor": [
         {
           "command": "intersystems-community.servermanager.setIconRed",
@@ -399,6 +448,21 @@
       ],
       "view/item/context": [
         {
+          "submenu": "intersystems-community.servermanager.overflow.server",
+          "when": "view == intersystems-community_servermanager && viewItem =~ /\\.server\\./",
+          "group": "inline@999"
+        },
+        {
+          "submenu": "intersystems-community.servermanager.overflow.namespaces",
+          "when": "view == intersystems-community_servermanager && viewItem =~ /namespaces$/",
+          "group": "inline@999"
+        },
+        {
+          "submenu": "intersystems-community.servermanager.overflow.namespace",
+          "when": "view == intersystems-community_servermanager && viewItem =~ /namespace$/",
+          "group": "inline@999"
+        },
+        {
           "command": "intersystems-community.servermanager.addServer",
           "when": "view == intersystems-community_servermanager && viewItem == sorted",
           "group": "inline@10"
@@ -456,12 +520,12 @@
         {
           "command": "intersystems-community.servermanager.storePassword",
           "when": "view == intersystems-community_servermanager && viewItem =~ /\\.server\\./",
-          "group": "2_password@10"
+          "group": "9_password@10"
         },
         {
           "command": "intersystems-community.servermanager.clearPassword",
           "when": "view == intersystems-community_servermanager && viewItem =~ /\\.server\\./",
-          "group": "2_password@20"
+          "group": "9_password@20"
         }
       ]
     }
