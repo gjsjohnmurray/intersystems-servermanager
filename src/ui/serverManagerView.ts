@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import path = require("path");
+import { exec } from "child_process";
 import { getServerNames } from "../api/getServerNames";
 import { getServerSpec } from "../api/getServerSpec";
 import { getServerSummary } from "../api/getServerSummary";
@@ -271,10 +273,95 @@ function allServers(treeItem: SMTreeItem, params?: any): ServerTreeItem[] {
 	return children;
 }
 
-function currentServers(element: SMTreeItem, params?: any): ServerTreeItem[] {
+async function currentServers(element: SMTreeItem, params?: any): Promise<ServerTreeItem[]> {
 	const children = new Map<string, ServerTreeItem>();
 
-	vscode.workspace.workspaceFolders?.map((folder) => {
+	const addDockerServer = async (dockerCompose: any, folder: vscode.WorkspaceFolder) => {
+		// Logic derived from utils/index.ts in vscode-objectscript
+		const { service, file = "docker-compose.yml", internalPort = 52773, envFile } = dockerCompose;
+		const workspaceFolderPath = folder.uri.fsPath;
+		const workspaceRootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+
+		// Local helper function to test file existence
+		const fileExists = async (file: vscode.Uri): Promise<boolean> => {
+			try {
+				await vscode.workspace.fs.stat(file);
+				return true;
+			} catch {
+				// Only error thown is "FileNotFound"
+				return false;
+			}
+		}
+		const cwd = await fileExists(vscode.Uri.file(path.join(workspaceFolderPath, file))).then(async (exists) => {
+			if (exists) {
+				return workspaceFolderPath;
+			}
+			if (workspaceRootPath && workspaceFolderPath !== workspaceRootPath) {
+				exists = await fileExists(vscode.Uri.file(path.join(workspaceRootPath, file)));
+				if (exists) {
+					return workspaceRootPath;
+				}
+				throw new Error(`File '${file}' not found in ${workspaceFolderPath} or ${workspaceRootPath}.`);
+			}
+			throw new Error(`File '${file}' not found in ${workspaceFolderPath}.`);
+		});
+
+		if (!cwd) {
+			return;
+		}
+
+		/** Determine the compose command to use (`docker-compose` or `docker compose`).  */
+		const composeCommand = async (cwd?: string): Promise<string> => {
+			return new Promise<string>((resolve) => {
+				let cmd = "docker compose";
+				exec(`${cmd} version`, { cwd }, (error) => {
+					if (error) {
+						// 'docker compose' is not present, so default to 'docker-compose'
+						cmd = "docker-compose";
+					}
+					resolve(cmd);
+				});
+			});
+		}
+
+		const envFileParam = envFile ? `--env-file ${envFile}` : "";
+		const cmd = `${await composeCommand(cwd)} -f ${file} ${envFileParam} `;
+		let port: number | undefined;
+		port = await new Promise<number>((resolve, reject) => {
+			exec(`${cmd} ps --services --filter status=running`, { cwd }, (error, stdout) => {
+				if (error) {
+					reject(error.message);
+				}
+				if (!stdout.replaceAll("\r", "").split("\n").includes(service)) {
+					reject(`Service '${service}' not found in '${path.join(cwd, file)}', or not running.`);
+				}
+
+				exec(`${cmd} port --protocol=tcp ${service} ${internalPort}`, { cwd }, (error, stdout) => {
+					if (error) {
+						reject(error.message);
+					}
+					const [, portString] = stdout.match(/:(\d+)/) || [];
+					if (!portString) {
+						reject(`Port ${internalPort} not published for service '${service}' in '${path.join(cwd, file)}'.`);
+					}
+					resolve(parseInt(portString, 10));
+				});
+			});
+		});
+		if (!port) {
+			return;
+		}
+
+		// Cannot use colon as separator because it delimits the elements in a tree id
+		const serverName = `docker~${service}~${port}`;
+		const serverSummary: IServerName = { name: serverName, description: `Docker service ${service} bound to local port ${port}`, detail: `http://localhost:${port}/` };
+		children.set(
+			serverName,
+			new ServerTreeItem({ parent: element, label: serverName, id: serverName }, serverSummary),
+		);
+	};
+
+	for (const folder of vscode.workspace.workspaceFolders || []) {
 		const serverName = folder.uri.authority.split(":")[0];
 		if (["isfs", "isfs-readonly"].includes(folder.uri.scheme)) {
 			const serverSummary = getServerSummary(serverName);
@@ -287,7 +374,13 @@ function currentServers(element: SMTreeItem, params?: any): ServerTreeItem[] {
 		}
 		const conn = vscode.workspace.getConfiguration("objectscript.conn", folder);
 		const connServer = conn.get<string>("server");
-		if (connServer) {
+		const inspectedServer = conn.inspect<string>("server");
+		const inspectedDockerCompose = conn.inspect<any>("docker-compose");
+		if (inspectedDockerCompose?.workspaceFolderValue?.service && !inspectedServer?.workspaceFolderValue) {
+			await addDockerServer(inspectedDockerCompose.workspaceFolderValue, folder);
+		} else if (inspectedDockerCompose?.workspaceValue?.service && !inspectedServer?.workspaceValue) {
+			await addDockerServer(inspectedDockerCompose.workspaceValue, folder);
+		} else if (connServer && serverName !== "127.0.0.1") {
 			const serverSummary = getServerSummary(connServer);
 			if (serverSummary) {
 				children.set(
@@ -295,8 +388,10 @@ function currentServers(element: SMTreeItem, params?: any): ServerTreeItem[] {
 					new ServerTreeItem({ parent: element, label: serverName, id: serverName }, serverSummary),
 				);
 			}
+		} else if (inspectedDockerCompose?.globalValue?.service) {
+			await addDockerServer(inspectedDockerCompose.globalValue, folder);
 		}
-	});
+	};
 
 	return Array.from(children.values()).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 }

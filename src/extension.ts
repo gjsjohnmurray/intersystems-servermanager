@@ -278,7 +278,9 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 
 					const params = [csp ? "csp" : "", project ? `project=${project}` : ""].filter(e => e != "").join("&");
-					const uri = vscode.Uri.parse(`isfs${readonly ? "-readonly" : ""}://${serverName}:${namespace}${csp && webApp ? webApp : "/"}${params ? `?${params}` : ""}`);
+					const uri = serverName.startsWith("docker~")
+						? vscode.Uri.parse(`isfs${readonly ? "-readonly" : ""}://127.0.0.1:${serverSpec.webServer.port}${csp && webApp ? webApp : "/"}?ns=${namespace}${params ? `&${params}` : ""}`)
+						: vscode.Uri.parse(`isfs${readonly ? "-readonly" : ""}://${serverName}:${namespace}${csp && webApp ? webApp : "/"}${params ? `?${params}` : ""}`);
 					if ((vscode.workspace.workspaceFolders || []).filter((workspaceFolder) => workspaceFolder.uri.toString() === uri.toString()).length === 0) {
 						const label = `${project ? `${project} - ` : ""}${serverName}:${namespace}${csp ? ' web files' : ''}${readonly && project == undefined ? " (read-only)" : ""}`;
 						const added = vscode.workspace.updateWorkspaceFolders(

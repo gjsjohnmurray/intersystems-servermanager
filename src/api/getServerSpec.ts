@@ -12,6 +12,12 @@ export async function getServerSpec(
 	name: string,
 	scope?: vscode.ConfigurationScope,
 ): Promise<IServerSpec | undefined> {
+
+	const arrNameParts = name.split("~");
+	if (arrNameParts.length === 3 && arrNameParts[0] === "docker") {
+		return { name, description: `Docker service ${arrNameParts[1]} bound to local port ${arrNameParts[2]}`, webServer: { scheme: "http", host: "127.0.0.1", port: parseInt(arrNameParts[2], 10), pathPrefix: "" } };
+	}
+
 	// To avoid breaking existing users, continue to return a default server definition even after we dropped that feature
 	let server: IServerSpec | undefined = vscode.workspace.getConfiguration("intersystems.servers", scope).get(name) || legacyEmbeddedServer(name);
 
